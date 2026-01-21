@@ -40,7 +40,9 @@
 #endif
 
 #ifdef HAVE_LIBCRYPTO
-
+#ifdef LIBRESSL_VERSION_NUMBER
+#include <openssl/poly1305.h>
+#endif
 #include <openssl/err.h>
 #include <openssl/md5.h>
 #include <openssl/opensslv.h>
@@ -738,7 +740,10 @@ struct chacha20_poly1305_keysched {
     EVP_CIPHER_CTX *main_evp;
     /* cipher handle used for encrypting the length field */
     EVP_CIPHER_CTX *header_evp;
-#if OPENSSL_VERSION_NUMBER < 0x30000000L
+#if defined(LIBRESSL_VERSION_NUMBER)
+    /* LibreSSL Poly1305 context */
+    poly1305_context poly_ctx;
+#elif OPENSSL_VERSION_NUMBER < 0x30000000L
     /* mac handle used for authenticating the packets */
     EVP_PKEY_CTX *pctx;
     /* Poly1305 key */
@@ -765,7 +770,9 @@ static void chacha20_poly1305_cleanup(struct ssh_cipher_struct *cipher)
     ctx->main_evp = NULL;
     EVP_CIPHER_CTX_free(ctx->header_evp);
     ctx->header_evp = NULL;
-#if OPENSSL_VERSION_NUMBER < 0x30000000L
+#if defined(LIBRESSL_VERSION_NUMBER)
+    /* nothing to free */
+#elif OPENSSL_VERSION_NUMBER < 0x30000000L
     /* ctx->pctx is freed as part of MD context */
     EVP_PKEY_free(ctx->key);
     ctx->key = NULL;
@@ -828,7 +835,9 @@ static int chacha20_poly1305_set_key(struct ssh_cipher_struct *cipher,
     /* The Poly1305 key initialization is delayed to the time we know
      * the actual key for packet so we do not need to create a bogus keys
      */
-#if OPENSSL_VERSION_NUMBER < 0x30000000L
+#if defined(LIBRESSL_VERSION_NUMBER)
+    /* nothing, poly1305_context is stack based */
+#elif OPENSSL_VERSION_NUMBER < 0x30000000L
     ctx->mctx = EVP_MD_CTX_new();
     if (ctx->mctx == NULL) {
         SSH_LOG(SSH_LOG_TRACE, "EVP_MD_CTX_new failed");
@@ -920,8 +929,11 @@ static int chacha20_poly1305_packet_setup(struct ssh_cipher_struct *cipher,
     ssh_log_hexdump("poly_key", poly_key, POLY1305_KEYLEN);
 #endif /* DEBUG_CRYPTO */
 
-    /* Set the Poly1305 key */
-#if OPENSSL_VERSION_NUMBER < 0x30000000L
+/* LibreSSL path: use direct Poly1305 implementation */
+#if defined(LIBRESSL_VERSION_NUMBER)
+    CRYPTO_poly1305_init(&ctx->poly_ctx, poly_key);
+/* Set the Poly1305 key */
+#elif OPENSSL_VERSION_NUMBER < 0x30000000L
     if (ctx->key == NULL) {
         /* Poly1305 Initialization needs to know the actual key */
         ctx->key = EVP_PKEY_new_mac_key(EVP_PKEY_POLY1305,
@@ -1019,7 +1031,9 @@ static int chacha20_poly1305_aead_decrypt(struct ssh_cipher_struct *cipher,
     uint8_t tag[POLY1305_TAGLEN] = {0};
     int ret = SSH_ERROR;
     int rv, cmp, len = 0;
+#if !defined(LIBRESSL_VERSION_NUMBER)
     size_t taglen = POLY1305_TAGLEN;
+#endif
 
     /* Prepare the Poly1305 key */
     rv = chacha20_poly1305_packet_setup(cipher, seq, 0);
@@ -1033,7 +1047,13 @@ static int chacha20_poly1305_aead_decrypt(struct ssh_cipher_struct *cipher,
 #endif /* DEBUG_CRYPTO */
 
     /* Calculate MAC of received data */
-#if OPENSSL_VERSION_NUMBER < 0x30000000L
+#if defined(LIBRESSL_VERSION_NUMBER)
+    CRYPTO_poly1305_update(&ctx->poly_ctx,
+                           complete_packet,
+                           encrypted_size + sizeof(uint32_t));
+    CRYPTO_poly1305_finish(&ctx->poly_ctx, tag);
+
+#elif OPENSSL_VERSION_NUMBER < 0x30000000L
     rv = EVP_DigestSignUpdate(ctx->mctx, complete_packet,
                               encrypted_size + sizeof(uint32_t));
     if (rv != 1) {
@@ -1105,7 +1125,9 @@ static void chacha20_poly1305_aead_encrypt(struct ssh_cipher_struct *cipher,
 {
     struct ssh_packet_header *in_packet = in, *out_packet = out;
     struct chacha20_poly1305_keysched *ctx = cipher->chacha20_schedule;
+#if !defined(LIBRESSL_VERSION_NUMBER)
     size_t taglen = POLY1305_TAGLEN;
+#endif
     int ret, outlen = 0;
 
     /* Prepare the Poly1305 key */
@@ -1154,7 +1176,13 @@ static void chacha20_poly1305_aead_encrypt(struct ssh_cipher_struct *cipher,
     }
 
     /* step 4, compute the MAC */
-#if OPENSSL_VERSION_NUMBER < 0x30000000L
+#if defined(LIBRESSL_VERSION_NUMBER)
+
+    CRYPTO_poly1305_update(&ctx->poly_ctx,
+                           (const unsigned char *)out_packet,
+                           len);
+    CRYPTO_poly1305_finish(&ctx->poly_ctx, tag);
+#elif OPENSSL_VERSION_NUMBER < 0x30000000L
     ret = EVP_DigestSignUpdate(ctx->mctx, out_packet, len);
     if (ret <= 0) {
         SSH_LOG(SSH_LOG_TRACE, "EVP_DigestSignUpdate failed");
