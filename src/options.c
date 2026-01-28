@@ -1197,7 +1197,6 @@ int ssh_options_set(ssh_session session, enum ssh_options_e type,
                 ssh_set_error_invalid(session);
                 return -1;
             } else {
-                ssh_proxyjumps_free(session->opts.proxy_jumps);
                 rc = ssh_config_parse_proxy_jump(session, v, true);
                 if (rc != SSH_OK) {
                     return SSH_ERROR;
