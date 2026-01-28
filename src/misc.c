@@ -1437,10 +1437,10 @@ char *ssh_path_expand_escape(ssh_session session, const char *s)
             break;
         case 'p': {
             char tmp[6];
+            unsigned int port;
 
-            snprintf(tmp, sizeof(tmp), "%hu",
-                     (uint16_t)(session->opts.port > 0 ? session->opts.port
-                                                       : 22));
+            ssh_options_get_port(session, &port);
+            snprintf(tmp, sizeof(tmp), "%u", port);
             x = strdup(tmp);
             break;
         }
