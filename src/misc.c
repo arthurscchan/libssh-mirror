@@ -1276,65 +1276,62 @@ char *ssh_path_expand_escape(ssh_session session, const char *s)
         }
 
         switch (*p) {
-            case '%':
-                goto escape;
-            case 'd':
-                if (session->opts.sshdir) {
-                    x = strdup(session->opts.sshdir);
-                } else {
-                    ssh_set_error(session, SSH_FATAL,
-                            "Cannot expand sshdir");
-                    free(buf);
-                    free(r);
-                    return NULL;
-                }
-                break;
-            case 'u':
-                x = ssh_get_local_username();
-                break;
-            case 'l':
-                if (gethostname(host, sizeof(host) == 0)) {
-                    x = strdup(host);
-                }
-                break;
-            case 'h':
-                if (session->opts.host) {
-                    x = strdup(session->opts.host);
-                } else {
-                    ssh_set_error(session, SSH_FATAL,
-                            "Cannot expand host");
-                    free(buf);
-                    free(r);
-                    return NULL;
-                }
-                break;
-            case 'r':
-                if (session->opts.username) {
-                    x = strdup(session->opts.username);
-                } else {
-                    ssh_set_error(session, SSH_FATAL,
-                            "Cannot expand username");
-                    free(buf);
-                    free(r);
-                    return NULL;
-                }
-                break;
-            case 'p':
-                {
-                  char tmp[6];
-
-                  snprintf(tmp, sizeof(tmp), "%hu",
-                           (uint16_t)(session->opts.port > 0 ? session->opts.port
-                                                             : 22));
-                  x = strdup(tmp);
-                }
-                break;
-            default:
-                ssh_set_error(session, SSH_FATAL,
-                        "Wrong escape sequence detected");
+        case '%':
+            goto escape;
+        case 'd':
+            if (session->opts.sshdir) {
+                x = strdup(session->opts.sshdir);
+            } else {
+                ssh_set_error(session, SSH_FATAL, "Cannot expand sshdir");
                 free(buf);
                 free(r);
                 return NULL;
+            }
+            break;
+        case 'u':
+            x = ssh_get_local_username();
+            break;
+        case 'l':
+            if (gethostname(host, sizeof(host) == 0)) {
+                x = strdup(host);
+            }
+            break;
+        case 'h':
+            if (session->opts.host) {
+                x = strdup(session->opts.host);
+            } else {
+                ssh_set_error(session, SSH_FATAL, "Cannot expand host");
+                free(buf);
+                free(r);
+                return NULL;
+            }
+            break;
+        case 'r':
+            if (session->opts.username) {
+                x = strdup(session->opts.username);
+            } else {
+                ssh_set_error(session, SSH_FATAL, "Cannot expand username");
+                free(buf);
+                free(r);
+                return NULL;
+            }
+            break;
+        case 'p': {
+            char tmp[6];
+
+            snprintf(tmp, sizeof(tmp), "%hu",
+                     (uint16_t)(session->opts.port > 0 ? session->opts.port
+                                                       : 22));
+            x = strdup(tmp);
+            break;
+        }
+        default:
+            ssh_set_error(session,
+                          SSH_FATAL,
+                          "Wrong escape sequence detected");
+            free(buf);
+            free(r);
+            return NULL;
         }
 
         if (x == NULL) {
@@ -1346,8 +1343,7 @@ char *ssh_path_expand_escape(ssh_session session, const char *s)
 
         i += strlen(x);
         if (i >= MAX_BUF_SIZE) {
-            ssh_set_error(session, SSH_FATAL,
-                    "String too long");
+            ssh_set_error(session, SSH_FATAL, "String too long");
             free(buf);
             free(x);
             free(r);
