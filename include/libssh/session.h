@@ -246,6 +246,7 @@ struct ssh_session_struct {
     struct {
         struct ssh_list *identity;
         struct ssh_list *identity_non_exp;
+        struct ssh_iterator *identity_it;
         struct ssh_list *certificate;
         struct ssh_list *certificate_non_exp;
         struct ssh_list *proxy_jumps;
