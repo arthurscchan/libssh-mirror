@@ -513,7 +513,7 @@ ssh_config_parse_proxy_jump(ssh_session session, const char *s, bool do_parsing)
     }
 
     if (do_parsing) {
-        /* Store the whole string in sesion */
+        /* Store the whole string in session */
         SAFE_FREE(session->opts.proxy_jumps_str);
         session->opts.proxy_jumps_str = strdup(s);
         if (session->opts.proxy_jumps_str == NULL) {
